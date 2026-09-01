@@ -1,0 +1,15 @@
+{
+    "trtr": {
+        "auroc": 0.6786,
+        "auprc": 0.7842,
+        "f1_score": 0.6667,
+        "accuracy": 0.6
+    },
+    "tstr": {
+        "auroc": 0.6964,
+        "auprc": 0.8155,
+        "f1_score": 0.6,
+        "accuracy": 0.4667
+    },
+    "relative_utility_pct": 102.63
+}

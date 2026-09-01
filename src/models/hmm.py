@@ -54,14 +54,16 @@ class DifferentiableHMM(nn.Module):
         
         # Reshape GMM params: (1, 1, num_states, num_mixtures, latent_dim)
         means = self.gmm_means.unsqueeze(0).unsqueeze(0)
-        logvars = self.gmm_logvars.unsqueeze(0).unsqueeze(0)
+        clamped_logvars = torch.clamp(self.gmm_logvars, min=-8.0, max=8.0)
+        logvars = clamped_logvars.unsqueeze(0).unsqueeze(0)
         
         # Calculate log normal density component-wise
         # log N(z; mu, sigma^2) = -0.5 * [ log(2*pi) + log(sigma^2) + (z - mu)^2 / sigma^2 ]
         diff = z_expanded - means
-        exponent = -0.5 * (logvars + (diff ** 2) / torch.exp(logvars))
+        exponent = -0.5 * (logvars + (diff ** 2) / (torch.exp(logvars) + 1e-6))
         log_2pi = 1.8378770664093453  # ln(2 * pi)
         log_gaussian = exponent - 0.5 * log_2pi
+
         
         # Sum over latent dimensions (diagonal covariance assumption)
         log_gaussian = log_gaussian.sum(dim=-1) # (batch_size, seq_len, num_states, num_mixtures)

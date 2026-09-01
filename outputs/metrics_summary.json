@@ -1,0 +1,39 @@
+{
+    "dataset": "MIMIC-III Clinical Database Demo (24-hour ICU Stays)",
+    "cohort_size": {
+        "real_stays": 75,
+        "synthetic_stays": 50,
+        "sequence_length_hours": 24,
+        "features_count": 6
+    },
+    "model": {
+        "architecture": "DG-HMM (Deep Generative Hidden Markov Model)",
+        "latent_dim": 8,
+        "hidden_states": 4,
+        "training_epochs": 50,
+        "final_joint_loss": 0.9801,
+        "final_recon_mse": 0.021
+    },
+    "metrics": {
+        "statistical_fidelity": {
+            "kolmogorov_smirnov_score": 0.0961,
+            "paper_benchmark_ks": 0.014,
+            "correlation_preservation": 0.9355,
+            "paper_benchmark_corr": 0.942
+        },
+        "temporal_consistency": {
+            "real_autocorrelation_lag1": 0.393,
+            "synthetic_autocorrelation_lag1": 0.7017,
+            "dynamic_time_warping_distance": 1.1069,
+            "paper_benchmark_dtw": 0.89
+        },
+        "privacy_protection": {
+            "mia_resistance_pct": 86.0,
+            "paper_benchmark_mia_pct": 89.4,
+            "min_distance": 0.3787,
+            "paper_benchmark_min_dist": 0.42,
+            "k_anonymity_score": 7,
+            "paper_benchmark_k_anon": 7.8
+        }
+    }
+}

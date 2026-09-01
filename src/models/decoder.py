@@ -75,8 +75,8 @@ class DeepDecoder(nn.Module):
                     head_out = torch.sigmoid(head_out)
                 elif f_type == 'count':
                     # softplus to ensure non-negative counts
-                    head_out = torch.smooth_l1_loss(head_out, torch.zeros_like(head_out)) # softplus is standard
                     head_out = torch.nn.functional.softplus(head_out)
+
                 elif f_type == 'categorical':
                     # Note: We do not apply softmax directly if cross entropy loss expects logits,
                     # but for synthetic generation, we will want probabilities.

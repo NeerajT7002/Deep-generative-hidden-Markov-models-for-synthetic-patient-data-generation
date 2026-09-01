@@ -18,18 +18,64 @@ class SequentialEHRDataset(Dataset):
         return self.data[idx]
 
 
-def preprocess_mimic_demo(base_path: str, seq_len: int = 24) -> tuple:
+class VitalsScaler:
+    """
+    Min-Max scaler for 3D temporal sequence arrays: (num_samples, seq_len, num_features).
+    Scales features to [0, 1] range to stabilize training, and provides inverse_transform
+    to restore generated synthetic records to physiological units.
+    """
+    def __init__(self, feature_range=(0.0, 1.0)):
+        self.min_val, self.max_val = feature_range
+        self.data_min = None
+        self.data_max = None
+        self._diff = None
+
+    def fit(self, data: np.ndarray):
+        # Compute min and max across samples and time steps for each feature
+        self.data_min = np.nanmin(data, axis=(0, 1), keepdims=True)  # (1, 1, D)
+        self.data_max = np.nanmax(data, axis=(0, 1), keepdims=True)  # (1, 1, D)
+        diff = self.data_max - self.data_min
+        diff[diff == 0] = 1.0
+        self._diff = diff
+        return self
+
+    def fit_transform(self, data: np.ndarray) -> np.ndarray:
+        self.fit(data)
+        return self.transform(data)
+
+    def transform(self, data: np.ndarray) -> np.ndarray:
+        if self.data_min is None:
+            raise ValueError("Scaler has not been fitted yet!")
+        scaled = (data - self.data_min) / self._diff
+        return scaled * (self.max_val - self.min_val) + self.min_val
+
+    def inverse_transform(self, data: np.ndarray) -> np.ndarray:
+        if self.data_min is None:
+            raise ValueError("Scaler has not been fitted yet!")
+        unscaled = (data - self.min_val) / (self.max_val - self.min_val)
+        return unscaled * self._diff + self.data_min
+
+
+def preprocess_mimic_demo(base_path: str, seq_len: int = 24, use_cache: bool = True) -> tuple:
     """
     Loads MIMIC-III demo CHARTEVENTS, extracts vitals, and builds sequence tensors.
+    Uses cached .npz if available for fast subsequent loading.
     
     Args:
         base_path (str): Path to the mimic-iii-clinical-database-demo-1.4 folder
         seq_len (int): Length of output sequence per patient stay (hours)
+        use_cache (bool): If True, checks for and writes to an .npz cache file
         
     Returns:
         sequences (np.ndarray): Tensor of shape (num_stays, seq_len, num_features)
         feature_names (list): Names of pivoted vitals features
     """
+    cache_path = os.path.join(base_path, f"mimic_demo_seq{seq_len}.npz")
+    if use_cache and os.path.exists(cache_path):
+        print(f"Loading cached preprocessed MIMIC-III sequences from: {cache_path}")
+        cached = np.load(cache_path, allow_pickle=True)
+        return cached["sequences"], cached["feature_names"].tolist()
+
     chartevents_path = os.path.join(base_path, "CHARTEVENTS.csv")
     
     # Target vitals itemids (Metavision)
@@ -110,6 +156,13 @@ def preprocess_mimic_demo(base_path: str, seq_len: int = 24) -> tuple:
         mean_val = np.nanmean(col) if not np.isnan(col).all() else 0.0
         sequences_arr[:, :, f_idx] = np.nan_to_num(col, nan=mean_val)
         
+    if use_cache:
+        try:
+            np.savez_compressed(cache_path, sequences=sequences_arr, feature_names=np.array(feature_names))
+            print(f"Saved preprocessed sequences cache to: {cache_path}")
+        except Exception as e:
+            print(f"Could not save cache: {e}")
+
     return sequences_arr, feature_names
 
 
@@ -118,4 +171,6 @@ def get_dataloader(data: np.ndarray, batch_size: int = 64, shuffle: bool = True)
     Generates a PyTorch DataLoader from preprocessed sequence matrices.
     """
     dataset = SequentialEHRDataset(data)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=True)
+    drop_last = len(dataset) > batch_size
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last)
+

@@ -1,9 +1,12 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+
+# Distribution / packaging
 build/
 develop-eggs/
 dist/
@@ -29,7 +32,7 @@ ENV/
 env/
 ActiveState.venv/
 
-# Jupyter Notebook
+# Jupyter Notebooks
 .ipynb_checkpoints
 
 # IDEs and Editors
@@ -38,7 +41,8 @@ ActiveState.venv/
 *.swp
 *.swo
 
-# Data and Logs
-data/
+# Operating System & Cache
+.DS_Store
+Thumbs.db
 *.log
 .system_generated/
