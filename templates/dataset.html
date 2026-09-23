@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synthetic Patient Cohort Dataset Explorer | DG-HMM</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v=3.2">
+    <style>
+        html, body {
+            background-color: #030508 !important;
+            color: #f8fafc !important;
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        }
+        .dataset-view-container {
+            max-width: 1560px;
+            margin: 0 auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+            position: relative;
+            z-index: 1;
+        }
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding: 16px 24px;
+        }
+        .filters-group {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+        .filter-label {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+        .custom-select, .search-input {
+            background: rgba(7, 10, 18, 0.85);
+            border: 1px solid var(--border-panel);
+            color: var(--text-primary);
+            padding: 9px 15px;
+            border-radius: 9px;
+            font-family: var(--font-sans);
+            font-size: 0.85rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        .custom-select:focus, .search-input:focus {
+            border-color: var(--cyan);
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
+        }
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 18px;
+        }
+        .kpi-mini-card {
+            padding: 18px 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+        }
+        .kpi-mini-card:hover {
+            transform: translateY(-2px);
+        }
+        .kpi-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .kpi-title {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .kpi-icon-badge {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 4px;
+            letter-spacing: 0.04em;
+        }
+        .kpi-icon-badge.cyan { background: rgba(0, 242, 254, 0.1); color: var(--cyan); border: 1px solid rgba(0, 242, 254, 0.25); }
+        .kpi-icon-badge.purple { background: rgba(168, 85, 247, 0.1); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.25); }
+        .kpi-icon-badge.emerald { background: rgba(0, 230, 118, 0.1); color: #6ee7b7; border: 1px solid rgba(0, 230, 118, 0.25); }
+        
+        .kpi-card-cyan { border-top: 2px solid rgba(0, 242, 254, 0.45); }
+        .kpi-card-purple { border-top: 2px solid rgba(168, 85, 247, 0.45); }
+        .kpi-card-emerald { border-top: 2px solid rgba(0, 230, 118, 0.45); }
+        
+        .kpi-num {
+            font-family: var(--font-mono);
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        .data-table-card {
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .table-scroll-container {
+            overflow: auto;
+            border: 1px solid var(--border-panel);
+            border-radius: 12px;
+            max-height: 600px;
+            background: rgba(4, 7, 14, 0.7);
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+        .data-table th {
+            position: sticky;
+            top: 0;
+            background: #0b1120;
+            color: var(--text-secondary);
+            padding: 13px 16px;
+            font-weight: 600;
+            font-size: 0.74rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border-panel);
+            z-index: 2;
+        }
+        .data-table td {
+            padding: 11px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            font-family: var(--font-mono);
+            color: #e2e8f0;
+        }
+        .data-table tbody tr:hover {
+            background: rgba(0, 242, 254, 0.04);
+        }
+        .state-badge {
+            display: inline-block;
+            font-size: 0.72rem;
+            padding: 3px 9px;
+            border-radius: 5px;
+            font-weight: 600;
+            font-family: var(--font-mono);
+        }
+        .badge-s0 { background: rgba(5, 150, 105, 0.25); color: #6ee7b7; border: 1px solid rgba(5, 150, 105, 0.4); }
+        .badge-s1 { background: rgba(2, 132, 199, 0.25); color: #7dd3fc; border: 1px solid rgba(2, 132, 199, 0.4); }
+        .badge-s2 { background: rgba(217, 119, 6, 0.25); color: #fde047; border: 1px solid rgba(217, 119, 6, 0.4); }
+        .badge-s3 { background: rgba(220, 38, 38, 0.25); color: #fca5a5; border: 1px solid rgba(220, 38, 38, 0.4); }
+
+        @media (max-width: 1024px) {
+            .kpi-row { grid-template-columns: repeat(2, 1fr); }
+            .nav-divider-vertical { display: none; }
+        }
+        @media (max-width: 768px) {
+            .kpi-row { grid-template-columns: 1fr; }
+            .dataset-top-nav { flex-direction: column; align-items: flex-start; }
+            .brand-cluster-left { width: 100%; justify-content: space-between; }
+            .nav-right-cluster { width: 100%; justify-content: space-between; margin-top: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Ambient Particle Canvas & Mesh Grid -->
+    <canvas id="bgParticleCanvas" class="bg-particle-canvas"></canvas>
+    <div class="mesh-overlay"></div>
+
+    <div class="dataset-view-container">
+        <!-- Top Command Header -->
+        <header class="top-nav glass-panel dataset-top-nav">
+            <div class="brand-cluster-left">
+                <!-- Return Pill Button -->
+                <a href="/" class="nav-back-pill" title="Return to DG-HMM Neural ICU Command Center">
+                    <svg class="back-arrow-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    <span>Return to AI Suite</span>
+                </a>
+
+                <div class="nav-divider-vertical"></div>
+
+                <!-- Brand & Cohort Identity -->
+                <div class="brand-cluster">
+                    <div class="cyber-pulse-badge">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                        </svg>
+                        <span class="ping-ring"></span>
+                    </div>
+                    <div class="brand-meta">
+                        <div class="brand-row">
+                            <h1 class="brand-title">Synthetic Cohort <span class="neon-text">Dataset Window</span></h1>
+                            <span class="version-tag">MIMIC-III DEMO</span>
+                            <span class="dataset-live-chip">
+                                <span class="pulse-dot-emerald"></span>
+                                <span>1,440 SAMPLES</span>
+                            </span>
+                        </div>
+                        <p class="brand-sub">60 Synthesized Longitudinal ICU Patient Stays (24 Hours) • Deep Generative Hidden Markov Models</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Telemetry & Actions -->
+            <div class="nav-right-cluster">
+                <div class="hud-telemetry">
+                    <div class="telemetry-pill">
+                        <span class="tele-dot green"></span>
+                        <span class="tele-label">COHORT FIDELITY</span>
+                        <span class="tele-val">99.3%</span>
+                    </div>
+                    <div class="telemetry-pill">
+                        <span class="tele-dot cyan"></span>
+                        <span class="tele-label">HORIZON</span>
+                        <span class="tele-val">24-HR ICU</span>
+                    </div>
+                </div>
+
+                <button class="cyber-btn cyber-btn-primary" id="btnDownloadFullCSV" title="Download Full Synthetic Cohort as CSV">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>Download Full CSV</span>
+                    <span class="btn-rows-badge">1,440 Rows</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- KPI Summary Cards -->
+        <div class="kpi-row">
+            <div class="glass-panel kpi-mini-card kpi-card-cyan">
+                <div class="kpi-header-row">
+                    <span class="kpi-title">SYNTHETIC PATIENTS</span>
+                    <span class="kpi-icon-badge cyan">60 STAYS</span>
+                </div>
+                <span class="kpi-num gradient-cyan" id="kpiPatients">60</span>
+            </div>
+            <div class="glass-panel kpi-mini-card kpi-card-purple">
+                <div class="kpi-header-row">
+                    <span class="kpi-title">TOTAL TIME STEPS</span>
+                    <span class="kpi-icon-badge purple">HOURLY</span>
+                </div>
+                <span class="kpi-num gradient-purple" id="kpiRows">1,440</span>
+            </div>
+            <div class="glass-panel kpi-mini-card kpi-card-emerald">
+                <div class="kpi-header-row">
+                    <span class="kpi-title">CLINICAL RULE COMPLIANCE</span>
+                    <span class="kpi-icon-badge emerald">PHYSIOLOGY</span>
+                </div>
+                <span class="kpi-num gradient-emerald">100.0%</span>
+            </div>
+            <div class="glass-panel kpi-mini-card kpi-card-emerald">
+                <div class="kpi-header-row">
+                    <span class="kpi-title">SURVIVAL BOUNDS ADHERENCE</span>
+                    <span class="kpi-icon-badge emerald">VALIDATED</span>
+                </div>
+                <span class="kpi-num gradient-emerald">100.0%</span>
+            </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="glass-panel toolbar">
+            <div class="filters-group">
+                <span class="filter-label">Filter Patient:</span>
+                <select class="custom-select" id="selectPatient">
+                    <option value="all">All Patients (1-60)</option>
+                    <!-- Options 1 to 60 populated by JS -->
+                </select>
+
+                <span class="filter-label">Filter State:</span>
+                <select class="custom-select" id="selectState">
+                    <option value="all">All States (0 - 3)</option>
+                    <option value="0">State 0: Stable</option>
+                    <option value="1">State 1: Moderate</option>
+                    <option value="2">State 2: Guarded</option>
+                    <option value="3">State 3: Critical</option>
+                </select>
+
+                <input type="text" class="search-input" id="tableSearch" placeholder="Search vitals, state, hour...">
+            </div>
+
+            <div class="table-counter" id="rowCountDisplay" style="font-size: 0.82rem; color: var(--text-muted); font-family: var(--font-mono);">
+                Showing: 1,440 rows
+            </div>
+        </div>
+
+        <!-- Main Data Table -->
+        <div class="glass-panel data-table-card">
+            <div class="table-scroll-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Patient ID</th>
+                            <th>Hour</th>
+                            <th>Clinical State</th>
+                            <th>Heart Rate</th>
+                            <th>Systolic BP</th>
+                            <th>Diastolic BP</th>
+                            <th>Pulse Press.</th>
+                            <th>Shock Index</th>
+                            <th>Resp. Rate</th>
+                            <th>SpO2</th>
+                            <th>Temp (°F)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cohortTableBody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script for Particle Canvas Background -->
+    <script>
+        (function initDatasetParticles() {
+            const canvas = document.getElementById('bgParticleCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            let particles = [];
+            let w = canvas.width = window.innerWidth;
+            let h = canvas.height = window.innerHeight;
+
+            window.addEventListener('resize', () => {
+                w = canvas.width = window.innerWidth;
+                h = canvas.height = window.innerHeight;
+            });
+
+            for (let i = 0; i < 40; i++) {
+                particles.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    vx: (Math.random() - 0.5) * 0.4,
+                    vy: (Math.random() - 0.5) * 0.4,
+                    radius: Math.random() * 1.8 + 0.8,
+                    color: Math.random() > 0.5 ? 'rgba(0, 242, 254, ' : 'rgba(168, 85, 247, '
+                });
+            }
+
+            function animate() {
+                ctx.clearRect(0, 0, w, h);
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.x < 0) p.x = w;
+                    if (p.x > w) p.x = 0;
+                    if (p.y < 0) p.y = h;
+                    if (p.y > h) p.y = 0;
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color + '0.45)';
+                    ctx.fill();
+                });
+                requestAnimationFrame(animate);
+            }
+            animate();
+        })();
+    </script>
+
+    <!-- Script for fetching & filtering dataset -->
+    <script>
+        let allRecords = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initPatientDropdown();
+            loadDataset();
+
+            document.getElementById('selectPatient').addEventListener('change', loadDataset);
+            document.getElementById('selectState').addEventListener('change', loadDataset);
+            document.getElementById('tableSearch').addEventListener('input', filterLocally);
+            document.getElementById('btnDownloadFullCSV').addEventListener('click', downloadDatasetFile);
+        });
+
+        function initPatientDropdown() {
+            const select = document.getElementById('selectPatient');
+            for (let i = 1; i <= 60; i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.innerText = `Patient #${i}`;
+                select.appendChild(opt);
+            }
+        }
+
+        async function loadDataset() {
+            const patientId = document.getElementById('selectPatient').value;
+            const stateId = document.getElementById('selectState').value;
+
+            let url = `/api/cohort_dataset?patient_id=${patientId}&state_id=${stateId}`;
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                allRecords = data.records;
+                renderRows(allRecords);
+                document.getElementById('kpiRows').innerText = data.total_records.toLocaleString();
+                document.getElementById('kpiPatients').innerText = data.total_patients;
+            } catch (err) {
+                console.error('Failed to load dataset:', err);
+            }
+        }
+
+        function renderRows(records) {
+            const tbody = document.getElementById('cohortTableBody');
+            document.getElementById('rowCountDisplay').innerText = `Showing: ${records.length} rows`;
+
+            if (!records || records.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--text-muted); padding: 30px;">No records match your filter.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = records.map(r => {
+                const sId = r.hidden_state_id;
+                const stateClass = `badge-s${sId}`;
+                const stateText = r.clinical_state || `State ${sId}`;
+                const pp = r['Pulse Pressure'] !== undefined ? r['Pulse Pressure'] : (r['Systolic BP'] - r['Diastolic BP']).toFixed(1);
+                const shock = r['Shock Index'] !== undefined ? r['Shock Index'] : (r['Heart Rate'] / Math.max(r['Systolic BP'], 1.0)).toFixed(2);
+
+                return `
+                    <tr>
+                        <td><strong>#${r.synthetic_patient_id}</strong></td>
+                        <td>H${r.hour}</td>
+                        <td><span class="state-badge ${stateClass}">${stateText}</span></td>
+                        <td>${parseFloat(r['Heart Rate']).toFixed(1)} bpm</td>
+                        <td>${parseFloat(r['Systolic BP']).toFixed(1)}</td>
+                        <td>${parseFloat(r['Diastolic BP']).toFixed(1)}</td>
+                        <td style="color: var(--emerald);">${pp}</td>
+                        <td style="color: #38bdf8;">${shock}</td>
+                        <td>${parseFloat(r['Respiratory Rate']).toFixed(1)}</td>
+                        <td style="color: var(--emerald);">${parseFloat(r['SpO2']).toFixed(1)}%</td>
+                        <td>${parseFloat(r['Temperature']).toFixed(2)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function filterLocally() {
+            const query = document.getElementById('tableSearch').value.toLowerCase();
+            if (!query) {
+                renderRows(allRecords);
+                return;
+            }
+            const filtered = allRecords.filter(r => {
+                return String(r.synthetic_patient_id).includes(query) ||
+                       String(r.hour).includes(query) ||
+                       String(r.clinical_state).toLowerCase().includes(query) ||
+                       String(r['Heart Rate']).includes(query) ||
+                       String(r['Systolic BP']).includes(query) ||
+                       String(r['SpO2']).includes(query);
+            });
+            renderRows(filtered);
+        }
+
+        function downloadDatasetFile() {
+            if (!allRecords || allRecords.length === 0) return;
+            const headers = Object.keys(allRecords[0]).join(',');
+            const rows = allRecords.map(r => Object.values(r).join(',')).join('\n');
+            const csvContent = "data:text/csv;charset=utf-8," + headers + "\n" + rows;
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `synthetic_patient_cohort_60stays.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

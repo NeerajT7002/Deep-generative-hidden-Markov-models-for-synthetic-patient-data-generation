@@ -5,6 +5,7 @@ class DeepEncoder(nn.Module):
     def __init__(self, input_dim: int, latent_dim: int, hidden_dims: list = [128, 64], dropout_rate: float = 0.3):
         """
         Deep Encoder Network f_phi: R^d -> R^k
+        (Momenzadeh & Oshaghi 2026, Page 3: Deep encoder network)
         
         Args:
             input_dim (int): Dimension of patient observations (d)
@@ -25,50 +26,43 @@ class DeepEncoder(nn.Module):
             
         self.feature_extractor = nn.Sequential(*layers)
         
-        # Latent parameters for VAE-style reparameterization
+        # Latent parameters for variational representation learning
         self.fc_mu = nn.Linear(curr_dim, latent_dim)
         self.fc_logvar = nn.Linear(curr_dim, latent_dim)
-        
-        # Post-sampling regularization (keeps all parameters active in computation graph)
-        self.regularize_latent = True
-        self.batch_norm_latent = nn.BatchNorm1d(latent_dim)
-        self.dropout_latent = nn.Dropout(dropout_rate)
-
 
     def reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
         """
         Reparameterization trick: sample z = mu + std * epsilon
         """
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
+        if self.training:
+            std = torch.exp(0.5 * torch.clamp(logvar, min=-8.0, max=8.0))
+            eps = torch.randn_like(std)
+            return mu + eps * std
+        return mu
 
     def forward(self, x: torch.Tensor):
         """
         Args:
-            x (torch.Tensor): Input batch of shape (batch_size, input_dim) or (batch_size * seq_len, input_dim)
+            x (torch.Tensor): Input batch of shape (batch_size, input_dim) or (batch_size, seq_len, input_dim)
             
         Returns:
-            z (torch.Tensor): Sampled latent vector (batch_size, seq_len, latent_dim)
+            z (torch.Tensor): Latent vector (batch_size, seq_len, latent_dim)
             mu (torch.Tensor): Mean of latent distribution
             logvar (torch.Tensor): Log-variance of latent distribution
         """
-        # Ensure 2D tensor for BatchNorm1d compatibility in feature extractor
         original_shape = x.shape
         if len(original_shape) == 3:
             # (batch_size, seq_len, input_dim) -> (batch_size * seq_len, input_dim)
-            x = x.contiguous().view(-1, original_shape[-1])
+            x_flat = x.contiguous().view(-1, original_shape[-1])
+        else:
+            x_flat = x
             
-        features = self.feature_extractor(x)
+        features = self.feature_extractor(x_flat)
         mu = self.fc_mu(features)
         logvar = self.fc_logvar(features)
         
         # Sample latent variable
         z = self.reparameterize(mu, logvar)
-        
-        if self.regularize_latent:
-            z = self.batch_norm_latent(z)
-            z = self.dropout_latent(z)
         
         # Restore sequence shape if input was 3D
         if len(original_shape) == 3:
@@ -77,4 +71,3 @@ class DeepEncoder(nn.Module):
             logvar = logvar.view(original_shape[0], original_shape[1], -1)
             
         return z, mu, logvar
-

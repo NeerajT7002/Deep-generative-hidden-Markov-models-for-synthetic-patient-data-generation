@@ -6,10 +6,10 @@
         "accuracy": 0.6
     },
     "tstr": {
-        "auroc": 0.6964,
-        "auprc": 0.8155,
-        "f1_score": 0.6,
+        "auroc": 0.6429,
+        "auprc": 0.7712,
+        "f1_score": 0.0,
         "accuracy": 0.4667
     },
-    "relative_utility_pct": 102.63
+    "relative_utility_pct": 94.74
 }

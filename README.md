@@ -2,9 +2,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg?logo=python)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C.svg?logo=pytorch)](https://pytorch.org/)
-[![Unit Tests](https://img.shields.io/badge/Tests-9%20Passing-brightgreen.svg)]()
-[![Paper Parity](https://img.shields.io/badge/Correlation%20Parity-99.3%25-success.svg)]()
-[![Downstream Utility](https://img.shields.io/badge/TSTR%20Utility-102.6%25-blueviolet.svg)]()
+[![Unit Tests](https://img.shields.io/badge/Tests-11%20Passing-brightgreen.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > An end-to-end implementation and clinical extension of **Deep Generative Hidden Markov Models (DG-HMM)** for generating high-fidelity, sequential, privacy-preserving synthetic Intensive Care Unit (ICU) patient records.
@@ -90,17 +88,23 @@ In this repository, we **reproduced the baseline results with 99.3% correlation 
 
 ## Quantitative Results vs. Published Paper Benchmarks
 
-The table below presents the quantitative performance of our DG-HMM model compared directly against the published benchmarks in **Tables 2, 3, and 5 of Momenzadeh & Oshaghi (2026)**:
+The table below presents the quantitative performance of our DG-HMM model evaluated across all four benchmark dimensions (**Tables 2, 3, 4, and 5 of Momenzadeh & Oshaghi 2026**). All metrics are computed using exact mathematical definitions without artificial clipping, scaling, or quantile replacement shortcuts:
 
-| Evaluation Dimension | Specific Metric | Our DG-HMM | Paper Benchmark Target | Reference in Paper | Experimental Parity |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **Statistical Fidelity** | **Correlation Preservation** | **0.9355** | **0.942** | Table 2 (Page 5) | **99.3% Parity** |
-| **Statistical Fidelity** | **Kolmogorov-Smirnov (KS) Score** | **0.0961** | **0.014** | Table 2 (Page 5) | **Realistic Range (< 0.10)** |
-| **Temporal Dynamics** | **Dynamic Time Warping (DTW)** | **1.1069** | **0.890** | Table 3 (Page 6) | **Matches Curve Morphology** |
-| **Temporal Dynamics** | **Synthetic Autocorrelation (Lag 1)** | **0.7017** | **0.876** | Table 3 (Page 6) | **Strong Temporal Memory** |
-| **Privacy Protection** | **MIA Attack Resistance** | **86.0%** | **89.4%** | Table 5 (Page 8) | **Enterprise HIPAA Privacy** |
-| **Privacy Protection** | **Minimum Record Distance** | **0.3787** | **0.420** | Table 5 (Page 8) | **No Patient Memorization** |
-| **Privacy Protection** | **k-Anonymity Score** | **7** | **7.8** | Table 5 (Page 8) | **Exact Target Cluster Size** |
+| Evaluation Dimension | Specific Metric | Our DG-HMM (MIMIC Demo) | Paper Benchmark (Full MIMIC-III) | Reference in Paper |
+| :--- | :--- | :---: | :---: | :---: |
+| **Statistical Fidelity** | **Kolmogorov-Smirnov (KS) Score** | **0.4862** | **0.014 ± 0.002** | Table 2 (Page 5) |
+| **Statistical Fidelity** | **Correlation Preservation** | **0.6642** | **0.942 ± 0.012** | Table 2 (Page 5) |
+| **Temporal Dynamics** | **Dynamic Time Warping (DTW)** | **0.4034** | **0.890 ± 0.110** | Table 3 (Page 6) |
+| **Temporal Dynamics** | **Autocorrelation (ACF@10)** | **-0.0452** | **0.876 ± 0.023** | Table 3 (Page 6) |
+| **Temporal Dynamics** | **Skewness Error** | **1.6817** | **0.067 ± 0.009** | Table 3 (Page 6) |
+| **Temporal Dynamics** | **Kurtosis Error** | **5.4839** | **0.094 ± 0.012** | Table 3 (Page 6) |
+| **Clinical Validity** | **Clinical Rule Compliance** | **100.0%** | **96.3 ± 1.8%** | Table 4 (Page 7) |
+| **Clinical Validity** | **Physiological Bounds Adherence** | **100.0%** | **94.8 ± 2.1%** | Table 4 (Page 7) |
+| **Privacy Protection** | **MIA Attack Resistance** | **37.0%** | **89.4 ± 2.1%** | Table 5 (Page 8) |
+| **Privacy Protection** | **Minimum Record Distance (RMS)** | **0.2398** | **0.420 ± 0.030** | Table 5 (Page 8) |
+| **Privacy Protection** | **k-Anonymity Score** | **1.0** | **7.8 ± 0.5** | Table 5 (Page 8) |
+
+> **Cohort Scope Note**: The published paper evaluated a full cohort of **15,728 ICU patients** over $\ge 48$ hours with multi-modal inputs (vitals, labs, medications, ventilator settings) trained on an NVIDIA RTX 4060 GPU with mixed precision for 8–12 hours per dataset. This academic demonstration project executes on the public **MIMIC-III Demo** (75 stays, 6 continuous vitals, 24 hours), demonstrating the mathematical architecture, modular components, and downstream utility on lightweight hardware.
 
 ---
 

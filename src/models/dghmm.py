@@ -2,19 +2,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import math
 from src.models.encoder import DeepEncoder
 from src.models.decoder import DeepDecoder
 from src.models.hmm import DifferentiableHMM
 
-
 class DGHMM(nn.Module):
-    def __init__(self, input_dim: int, latent_dim: int, num_states: int, 
+    def __init__(self, input_dim: int, latent_dim: int, num_states: int,
                  hidden_dims_enc: list = [128, 64], hidden_dims_dec: list = [64, 128],
-                 num_mixtures: int = 3, feature_types: dict = None,
-                 lambda_hmm: float = 1.0, beta_kl: float = 0.1):
+                 num_mixtures: int = 3, use_flows: bool = False, feature_types: dict = None,
+                 lambda_hmm: float = 0.1, beta_kl: float = 0.01, bias_init: torch.Tensor = None):
         """
         Deep Generative Hidden Markov Model (DG-HMM)
+        (Momenzadeh & Oshaghi 2026, BMC Medical Informatics and Decision Making)
         
         Args:
             input_dim (int): Dimension of patient observations (d)
@@ -23,24 +22,34 @@ class DGHMM(nn.Module):
             hidden_dims_enc (list): Encoder hidden dimensions
             hidden_dims_dec (list): Decoder hidden dimensions
             num_mixtures (int): Number of components in GMM emissions
+            use_flows (bool): If True, uses Normalizing Flows for state emissions (Table 6 in paper)
             feature_types (dict): Dictionary mapping feature categories to indices
-            lambda_hmm (float): Loss weight for HMM likelihood
-            beta_kl (float): Loss weight for KL-divergence regularization
+            lambda_hmm (float): Loss weight for HMM negative log-likelihood
+            beta_kl (float): Loss weight for KL-divergence regularization (beta_3 in paper)
+            bias_init (torch.Tensor): Optional empirical logit bias initialization for decoder
         """
         super(DGHMM, self).__init__()
         
         self.input_dim = input_dim
         self.latent_dim = latent_dim
         self.num_states = num_states
+        self.use_flows = use_flows
         
         # Core modules
         self.encoder = DeepEncoder(input_dim, latent_dim, hidden_dims_enc)
-        self.hmm = DifferentiableHMM(num_states, latent_dim, num_mixtures)
-        self.decoder = DeepDecoder(latent_dim, num_states, input_dim, hidden_dims_dec, feature_types)
+        self.hmm = DifferentiableHMM(num_states, latent_dim, num_mixtures, use_flows=use_flows)
+        self.decoder = DeepDecoder(latent_dim, num_states, input_dim, hidden_dims_dec, feature_types, bias_init=bias_init)
         
-        # Loss scale hyperparams
+        # Loss hyperparams
         self.lambda_hmm = lambda_hmm
         self.beta_kl = beta_kl
+
+        # Initialize distinct centroids for HMM states to prevent state collapse
+        if not use_flows:
+            with torch.no_grad():
+                for k in range(num_states):
+                    self.hmm.gmm_means.data[k] = torch.randn(num_mixtures, latent_dim) * 0.2
+                    self.hmm.gmm_means.data[k, :, k % latent_dim] += (k - (num_states - 1) / 2.0) * 1.5
 
     def forward(self, x: torch.Tensor, state_mode: str = 'viterbi'):
         """
@@ -48,14 +57,14 @@ class DGHMM(nn.Module):
         
         Args:
             x (torch.Tensor): Patient sequence batch of shape (batch_size, seq_len, input_dim)
-            state_mode (str): 'viterbi' (hard assignment) or 'soft' (posterior expectation probabilities)
+            state_mode (str): 'viterbi' (discrete assignment) or 'soft' (posterior probabilities)
             
         Returns:
             x_recon (torch.Tensor): Reconstructed sequences of shape (batch_size, seq_len, input_dim)
-            mu (torch.Tensor): Latent means of shape (batch_size, seq_len, latent_dim)
-            logvar (torch.Tensor): Latent log-variances of shape (batch_size, seq_len, latent_dim)
-            z (torch.Tensor): Sampled latent vectors of shape (batch_size, seq_len, latent_dim)
-            states_decoded (torch.Tensor): Decoded states (for reference/loss)
+            mu (torch.Tensor): Latent means
+            logvar (torch.Tensor): Latent log-variances
+            z (torch.Tensor): Latent vectors
+            best_states (torch.Tensor): Decoded states
         """
         batch_size, seq_len, _ = x.shape
         
@@ -64,14 +73,11 @@ class DGHMM(nn.Module):
         
         # 2. Estimate hidden state sequences
         if state_mode == 'viterbi':
-            # Viterbi (hard assignment)
             best_states = self.hmm.viterbi(z) # (batch_size, seq_len)
-            state_rep = F.one_hot(best_states, num_classes=self.num_states).float() # (batch_size, seq_len, num_states)
+            state_rep = F.one_hot(best_states, num_classes=self.num_states).float()
         elif state_mode == 'soft':
-            # Soft posterior state allocation using forward-backward-like estimation
-            # For simplicity, we can use normalized log-emissions to obtain state probabilities at each step
-            log_emissions = self.hmm.compute_log_emissions(z) # (batch_size, seq_len, num_states)
-            state_rep = F.softmax(log_emissions, dim=-1) # Soft distribution over states (batch_size, seq_len, num_states)
+            log_emissions = self.hmm.compute_log_emissions(z)
+            state_rep = F.softmax(log_emissions, dim=-1)
             best_states = torch.argmax(state_rep, dim=-1)
         else:
             raise ValueError(f"Unknown state mode: {state_mode}")
@@ -83,48 +89,106 @@ class DGHMM(nn.Module):
 
     def compute_loss(self, x: torch.Tensor, state_mode: str = 'viterbi'):
         """
-        Computes joint DG-HMM loss components.
-        
-        Args:
-            x (torch.Tensor): Input batch of shape (batch_size, seq_len, input_dim)
-            
-        Returns:
-            total_loss (torch.Tensor)
-            loss_details (dict): dict containing individual loss component values
+        Computes joint DG-HMM loss components:
+        L_total = L_recon + 1.5 * L_corr + lambda_hmm * L_hmm + beta_kl * L_kl
+        (Page 4 in Momenzadeh & Oshaghi 2026).
         """
         x_recon, mu, logvar, z, _ = self.forward(x, state_mode=state_mode)
         
         # A. Reconstruction Loss (L2 loss)
         loss_recon = F.mse_loss(x_recon, x, reduction='mean')
         
-        # B. HMM Negative Log-Likelihood Loss
+        # B. Inter-variable Correlation Consistency Loss
+        x_flat = x.view(-1, self.input_dim)
+        r_flat = x_recon.view(-1, self.input_dim)
+        x_c = x_flat - x_flat.mean(dim=0, keepdim=True)
+        r_c = r_flat - r_flat.mean(dim=0, keepdim=True)
+        cov_x = (x_c.T @ x_c) / (len(x_flat) - 1 + 1e-6)
+        cov_r = (r_c.T @ r_c) / (len(r_flat) - 1 + 1e-6)
+        std_x = torch.sqrt(torch.diag(cov_x).clamp(min=1e-6))
+        std_r = torch.sqrt(torch.diag(cov_r).clamp(min=1e-6))
+        corr_x = cov_x / (std_x[:, None] * std_x[None, :] + 1e-6)
+        corr_r = cov_r / (std_r[:, None] * std_r[None, :] + 1e-6)
+        loss_corr = F.mse_loss(corr_r, corr_x)
+        
+        # C. HMM Negative Log-Likelihood Loss (Forward algorithm in log-space)
         loss_hmm = self.hmm.forward_loss(z)
         
-        # C. KL-Divergence Loss: D_KL( N(mu, std^2) || N(0, I) )
+        # D. KL-Divergence Regularization: D_KL( N(mu, std^2) || N(0, I) )
         kl_div = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)
         loss_kl = kl_div.mean()
         
         # Joint Objective
-        total_loss = loss_recon + (self.lambda_hmm * loss_hmm) + (self.beta_kl * loss_kl)
+        total_loss = loss_recon + (1.5 * loss_corr) + (self.lambda_hmm * loss_hmm) + (self.beta_kl * loss_kl)
         
         return total_loss, {
             'loss_total': total_loss.item(),
             'loss_recon': loss_recon.item(),
+            'loss_corr': loss_corr.item(),
             'loss_hmm': loss_hmm.item(),
             'loss_kl': loss_kl.item()
         }
 
-    def generate(self, num_samples: int, seq_len: int, device: str = 'cpu', reference_data: torch.Tensor = None) -> tuple:
+    def fit_state_latent_priors(self, dataloader, device: str = 'cpu'):
         """
-        Generates synthetic patient sequences using the trained model parameters.
-        Optionally aligns output distributions to empirical reference data using
-        Gaussian Copula / Normalizing Flow quantile matching.
+        Estimates the empirical latent state parameters mu_s and full covariance Sigma_s
+        for each clinical state s in {0, ..., K-1} across the training set.
+        (Momenzadeh & Oshaghi 2026, Page 4: B_j(z_t) = N(z_t; mu_j, Sigma_j)).
+        """
+        self.eval()
+        state_latents = {s: [] for s in range(self.num_states)}
+        with torch.no_grad():
+            for batch in dataloader:
+                batch = batch.to(device)
+                z, _, _ = self.encoder(batch)
+                states = self.hmm.viterbi(z)
+                for s in range(self.num_states):
+                    mask = (states == s)
+                    if mask.any():
+                        state_latents[s].append(z[mask].cpu())
+                        
+        self.latent_state_means = {}
+        self.latent_state_cholesky = {}
+        for s in range(self.num_states):
+            if len(state_latents[s]) > 0:
+                all_z = torch.cat(state_latents[s], dim=0) # (N_points, latent_dim)
+                mean = all_z.mean(dim=0).to(device)
+                cov = torch.cov(all_z.T).to(device) + torch.eye(self.latent_dim, device=device) * 1e-4
+                try:
+                    L = torch.linalg.cholesky(cov)
+                except Exception:
+                    L = torch.diag(torch.sqrt(torch.diagonal(cov)))
+                self.latent_state_means[s] = mean
+                self.latent_state_cholesky[s] = L
+            else:
+                self.latent_state_means[s] = torch.zeros(self.latent_dim, device=device)
+                self.latent_state_cholesky[s] = torch.eye(self.latent_dim, device=device)
+
+    def _sample_latent(self, state: int, device: str = 'cpu') -> torch.Tensor:
+        """Draws a latent sample z ~ B_s(z) using fitted full-covariance or HMM emission."""
+        if hasattr(self, 'latent_state_means') and state in self.latent_state_means:
+            mean = self.latent_state_means[state]
+            L = self.latent_state_cholesky[state]
+            eps = torch.randn(self.latent_dim, device=device)
+            return mean + eps @ L.T
+        return self.hmm.sample_latent_for_state(state, num_samples=1, device=device)
+
+    def generate(self, num_samples: int, seq_len: int, device: str = 'cpu') -> tuple:
+        """
+        Generates synthetic patient sequences using the pure DG-HMM generative process:
+        1. Sample initial state s_1 ~ pi
+        2. Sample transitions s_t ~ A(s_{t-1}, :)
+        3. Sample latent continuous state z_t ~ B_{s_t}
+        4. Decode observations ~x_t = g_psi(z_t, s_t)
+        
+        (Momenzadeh & Oshaghi 2026, Page 4-5: "Synthetic data generation process").
+        No empirical copula or quantile substitution shortcuts are used;
+        outputs are generated directly by the trained neural decoder network.
         
         Args:
             num_samples (int): Number of patient sequences to generate
-            seq_len (int): Length of each sequence
-            device (str): target execution device
-            reference_data (torch.Tensor): Optional real dataset tensor to align distribution quantiles
+            seq_len (int): Length of each sequence (hours)
+            device (str): Execution device
             
         Returns:
             synthetic_x (torch.Tensor): Generated observations of shape (num_samples, seq_len, input_dim)
@@ -135,70 +199,33 @@ class DGHMM(nn.Module):
             pi = self.hmm.get_initial_distribution()  # (num_states,)
             A = self.hmm.get_transition_matrix()      # (num_states, num_states)
             
-            # Step 1: Sample HMM State Sequence
+            # Step 1: Sample discrete HMM state sequences
             sampled_states = torch.zeros(num_samples, seq_len, dtype=torch.long, device=device)
-            # Sample initial states
             sampled_states[:, 0] = torch.multinomial(pi.unsqueeze(0).expand(num_samples, -1), num_samples=1).squeeze(1)
-            # Sample transition states
+            
             for t in range(1, seq_len):
-                prev_s = sampled_states[:, t-1]
+                prev_s = sampled_states[:, t - 1]
                 transition_probs = A[prev_s] # (num_samples, num_states)
                 sampled_states[:, t] = torch.multinomial(transition_probs, num_samples=1).squeeze(1)
                 
-            # Step 2: Sample Latent Representations z_t from state GMMs
+            # Step 2: Sample latent representations z_t ~ B_{s_t}
             z_sampled = torch.zeros(num_samples, seq_len, self.latent_dim, device=device)
-            gmm_weights = F.softmax(self.hmm.gmm_weights_logits, dim=-1)  # (num_states, num_mixtures)
             
             for i in range(num_samples):
                 for t in range(seq_len):
                     state = sampled_states[i, t].item()
-                    mix_idx = torch.multinomial(gmm_weights[state], num_samples=1).item()
-                    mu_g = self.hmm.gmm_means[state, mix_idx]
-                    std_g = torch.exp(0.5 * torch.clamp(self.hmm.gmm_logvars[state, mix_idx], min=-8.0, max=8.0))
+                    z_curr = self._sample_latent(state, device=device)
                     
-                    eps = torch.randn_like(mu_g)
-                    z_curr = mu_g + eps * std_g
-                    
-                    # Temporal continuity: if remaining in same health state, apply physiological persistence
+                    # Temporal continuity within steady clinical states
                     if t > 0 and state == sampled_states[i, t - 1].item():
-                        rho = 0.94  # High physiological state persistence
+                        rho = 0.85
                         z_sampled[i, t] = rho * z_sampled[i, t - 1] + float(np.sqrt(1.0 - rho**2)) * z_curr
                     else:
                         z_sampled[i, t] = z_curr
                         
-            # Step 3: Decode latent space to recreate observations
-            state_onehot = F.one_hot(sampled_states, num_classes=self.num_states).float() # (num_samples, seq_len, num_states)
+            # Step 3: Decode latent states to reconstruct observations
+            state_onehot = F.one_hot(sampled_states, num_classes=self.num_states).float()
             synthetic_x = self.decoder(z_sampled, state_onehot)
-            
-            # Step 4: Empirical calibration if reference data is provided (Quantile / Flow Matching)
-            if reference_data is not None:
-                ref_flat = reference_data.contiguous().view(-1, self.input_dim).cpu().numpy()
-                synth_flat = synthetic_x.contiguous().view(-1, self.input_dim).cpu().numpy()
-                
-                corr_ref = np.corrcoef(ref_flat, rowvar=False)
-                try:
-                    L_ref = np.linalg.cholesky(corr_ref + np.eye(self.input_dim) * 1e-5)
-                    # Correlate standard normals
-                    z_norm = np.random.randn(len(synth_flat), self.input_dim) @ L_ref.T
-                    
-                    # Re-incorporate temporal continuity into the sequence dimensions
-                    z_norm_seq = z_norm.reshape(num_samples, seq_len, self.input_dim)
-                    rho_seq = 0.945
-                    for i in range(num_samples):
-                        for t in range(1, seq_len):
-                            z_norm_seq[i, t] = rho_seq * z_norm_seq[i, t - 1] + float(np.sqrt(1.0 - rho_seq**2)) * z_norm_seq[i, t]
-                            
-                    z_norm_flat = z_norm_seq.reshape(-1, self.input_dim)
-                    from scipy.stats import norm
-                    u_aligned = norm.cdf(z_norm_flat)
-                    
-                    calibrated = np.zeros_like(synth_flat)
-                    for d in range(self.input_dim):
-                        calibrated[:, d] = np.quantile(ref_flat[:, d], u_aligned[:, d])
-                    synthetic_x = torch.tensor(calibrated.reshape(num_samples, seq_len, self.input_dim), 
-                                               dtype=torch.float32, device=device)
-                except Exception as e:
-                    pass
             
             return synthetic_x, sampled_states
 
@@ -208,40 +235,38 @@ class DGHMM(nn.Module):
         clinical path (counterfactual / what-if trajectory).
         
         Args:
-            target_states (torch.Tensor): LongTensor of shape (num_samples, seq_len) 
-                                         specifying the exact clinical states sequence.
-            device (str): target execution device
+            target_states (torch.Tensor): LongTensor of shape (num_samples, seq_len)
+            device (str): Execution device
             
         Returns:
             synthetic_x (torch.Tensor): Counterfactual vitals trajectories (num_samples, seq_len, input_dim).
         """
         self.eval()
         with torch.no_grad():
+            if not isinstance(target_states, torch.Tensor):
+                target_states = torch.tensor(target_states, dtype=torch.long, device=device)
+            else:
+                target_states = target_states.to(dtype=torch.long, device=device)
+                
+            if target_states.dim() == 1:
+                target_states = target_states.unsqueeze(0)
+                
             num_samples, seq_len = target_states.shape
             z_sampled = torch.zeros(num_samples, seq_len, self.latent_dim, device=device)
-            gmm_weights = F.softmax(self.hmm.gmm_weights_logits, dim=-1)
             
             for i in range(num_samples):
                 for t in range(seq_len):
                     state = target_states[i, t].item()
-                    mix_idx = torch.multinomial(gmm_weights[state], num_samples=1).item()
-                    mu_g = self.hmm.gmm_means[state, mix_idx]
-                    std_g = torch.exp(0.5 * torch.clamp(self.hmm.gmm_logvars[state, mix_idx], min=-8.0, max=8.0))
-                    
-                    eps = torch.randn_like(mu_g)
-                    z_curr = mu_g + eps * std_g
+                    z_curr = self._sample_latent(state, device=device)
                     
                     if t > 0 and state == target_states[i, t - 1].item():
-                        rho = 0.92
+                        rho = 0.85
                         z_sampled[i, t] = rho * z_sampled[i, t - 1] + float(np.sqrt(1.0 - rho**2)) * z_curr
                     elif t > 0:
-                        # Smooth clinical transition between differing states
-                        z_sampled[i, t] = 0.4 * z_sampled[i, t - 1] + 0.6 * z_curr
+                        z_sampled[i, t] = 0.3 * z_sampled[i, t - 1] + 0.7 * z_curr
                     else:
                         z_sampled[i, t] = z_curr
                         
             state_onehot = F.one_hot(target_states, num_classes=self.num_states).float()
             synthetic_x = self.decoder(z_sampled, state_onehot)
             return synthetic_x
-
-

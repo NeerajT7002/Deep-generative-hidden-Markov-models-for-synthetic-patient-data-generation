@@ -58,7 +58,11 @@ def main():
 
     if os.path.exists(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-        model.load_state_dict(checkpoint['model_state_dict'])
+        if 'model_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'])
+        if 'latent_state_means' in checkpoint:
+            model.latent_state_means = checkpoint['latent_state_means']
+            model.latent_state_cholesky = checkpoint['latent_state_cholesky']
         print(f"Loaded trained DG-HMM weights from: {checkpoint_path}")
     else:
         print("Warning: No checkpoint found, using initialized weights.")
@@ -136,8 +140,7 @@ def main():
         synth_scaled_tensor, _ = model.generate(
             num_samples=60, 
             seq_len=24, 
-            device=device,
-            reference_data=torch.tensor(train_scaled, dtype=torch.float32, device=device)
+            device=device
         )
         synthetic_denorm = scaler.inverse_transform(synth_scaled_tensor.cpu().numpy())
 

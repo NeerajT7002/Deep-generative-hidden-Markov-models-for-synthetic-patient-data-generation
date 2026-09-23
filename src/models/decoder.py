@@ -2,17 +2,18 @@ import torch
 import torch.nn as nn
 
 class DeepDecoder(nn.Module):
-    def __init__(self, latent_dim: int, num_states: int, output_dim: int, hidden_dims: list = [64, 128], feature_types: dict = None):
+    def __init__(self, latent_dim: int, num_states: int, output_dim: int, 
+                 hidden_dims: list = [64, 128], feature_types: dict = None,
+                 bias_init: torch.Tensor = None):
         """
-        Deep Decoder Network g_psi: R^k x {1, ..., K} -> R^d
-        
         Args:
-            latent_dim (int): Dimension of latent space (k)
-            num_states (int): Number of HMM states (K)
-            output_dim (int): Dimension of output observation (d)
-            hidden_dims (list): Dimensions of hidden layers
-            feature_types (dict): Optional dictionary mapping feature indices to their types 
+            latent_dim (int): Dimensionality of continuous latent vector z_t
+            num_states (int): Number of discrete HMM states (for one-hot encoding)
+            output_dim (int): Dimensionality of observations x_t
+            hidden_dims (list): Hidden layer dimensions
+            feature_types (dict): Optional mapping of feature types to column indices
                                   e.g., {'continuous': [0, 1, 2], 'binary': [3, 4], 'count': [5]}
+            bias_init (torch.Tensor): Optional empirical logit bias initialization for output layer
         """
         super(DeepDecoder, self).__init__()
         
@@ -37,6 +38,9 @@ class DeepDecoder(nn.Module):
         if self.feature_types is None:
             # Single linear head for general reconstruction
             self.reconstruct_head = nn.Linear(curr_dim, output_dim)
+            if bias_init is not None:
+                with torch.no_grad():
+                    self.reconstruct_head.bias.copy_(bias_init.clone().detach())
         else:
             # Mixed-type reconstruction heads
             self.heads = nn.ModuleDict()
@@ -63,7 +67,7 @@ class DeepDecoder(nn.Module):
         shared_out = self.shared_decoder(combined)
         
         if self.feature_types is None:
-            x_recon = self.reconstruct_head(shared_out)
+            x_recon = torch.sigmoid(self.reconstruct_head(shared_out))
         else:
             # Reconstruct each feature type block and combine
             x_recon_parts = {}

@@ -2,38 +2,49 @@
     "dataset": "MIMIC-III Clinical Database Demo (24-hour ICU Stays)",
     "cohort_size": {
         "real_stays": 75,
-        "synthetic_stays": 50,
+        "synthetic_stays": 60,
         "sequence_length_hours": 24,
         "features_count": 6
     },
     "model": {
-        "architecture": "DG-HMM (Deep Generative Hidden Markov Model)",
+        "architecture": "Pure DG-HMM (Deep Generative Hidden Markov Model)",
         "latent_dim": 8,
         "hidden_states": 4,
-        "training_epochs": 50,
-        "final_joint_loss": 0.9801,
-        "final_recon_mse": 0.021
+        "training_epochs": 100,
+        "final_joint_loss": 0.7812,
+        "final_recon_mse": 0.0205
     },
     "metrics": {
-        "statistical_fidelity": {
-            "kolmogorov_smirnov_score": 0.0961,
-            "paper_benchmark_ks": 0.014,
-            "correlation_preservation": 0.9355,
-            "paper_benchmark_corr": 0.942
+        "table_2_statistical_fidelity": {
+            "kolmogorov_smirnov_score": 0.4523,
+            "paper_target_ks": 0.014,
+            "correlation_preservation": 0.5602,
+            "paper_target_corr": 0.942
         },
-        "temporal_consistency": {
-            "real_autocorrelation_lag1": 0.393,
-            "synthetic_autocorrelation_lag1": 0.7017,
-            "dynamic_time_warping_distance": 1.1069,
-            "paper_benchmark_dtw": 0.89
+        "table_3_temporal_consistency": {
+            "synthetic_autocorrelation_acf1": 0.087,
+            "synthetic_autocorrelation_acf10": -0.0457,
+            "paper_target_acf10": 0.876,
+            "dynamic_time_warping_distance": 0.3335,
+            "paper_target_dtw": 0.89,
+            "skewness_error": 1.503,
+            "paper_target_skewness": 0.067,
+            "kurtosis_error": 6.2483,
+            "paper_target_kurtosis": 0.094
         },
-        "privacy_protection": {
-            "mia_resistance_pct": 86.0,
-            "paper_benchmark_mia_pct": 89.4,
-            "min_distance": 0.3787,
-            "paper_benchmark_min_dist": 0.42,
-            "k_anonymity_score": 7,
-            "paper_benchmark_k_anon": 7.8
+        "table_4_clinical_validity": {
+            "clinical_rule_compliance_pct": 100.0,
+            "paper_target_rule_compliance_pct": 96.3,
+            "physiological_bounds_adherence_pct": 100.0,
+            "paper_target_phys_bounds_pct": 94.8
+        },
+        "table_5_privacy_protection": {
+            "mia_resistance_pct": 51.85,
+            "paper_target_mia_pct": 89.4,
+            "min_distance_rms": 0.1953,
+            "paper_target_min_dist": 0.42,
+            "k_anonymity_score": 1.0,
+            "paper_target_k_anon": 7.8
         }
     }
 }
