@@ -8,8 +8,8 @@ def evaluate_mia_resistance(real_train: np.ndarray, real_test: np.ndarray,
     """
     Simulates a Membership Inference Attack (MIA) against the generative model (van Breugel et al. 2023).
     The attacker classifier learns from nearest-neighbor proximity features to distinguish training records from holdout test records.
-    MIA Resistance is mathematically defined as: 1.0 - 2.0 * |Attacker_Accuracy - 0.5|.
-    An attacker at random chance (50% accuracy) gives 100% resistance (perfect privacy).
+    MIA Resistance is defined as: 1.0 - 2.0 * |Attacker_Accuracy - 0.5|.
+    An attacker at random chance (50% accuracy) corresponds to 100% resistance on this empirical metric.
     
     Args:
         real_train: (N_train, seq_len, D)

@@ -11,25 +11,25 @@
         "latent_dim": 8,
         "hidden_states": 4,
         "training_epochs": 100,
-        "final_joint_loss": 0.7812,
+        "final_joint_loss": 0.7802,
         "final_recon_mse": 0.0205
     },
     "metrics": {
         "table_2_statistical_fidelity": {
-            "kolmogorov_smirnov_score": 0.4523,
+            "kolmogorov_smirnov_score": 0.4535,
             "paper_target_ks": 0.014,
-            "correlation_preservation": 0.5602,
+            "correlation_preservation": 0.5691,
             "paper_target_corr": 0.942
         },
         "table_3_temporal_consistency": {
-            "synthetic_autocorrelation_acf1": 0.087,
-            "synthetic_autocorrelation_acf10": -0.0457,
+            "synthetic_autocorrelation_acf1": 0.0871,
+            "synthetic_autocorrelation_acf10": -0.0453,
             "paper_target_acf10": 0.876,
             "dynamic_time_warping_distance": 0.3335,
             "paper_target_dtw": 0.89,
-            "skewness_error": 1.503,
+            "skewness_error": 1.5038,
             "paper_target_skewness": 0.067,
-            "kurtosis_error": 6.2483,
+            "kurtosis_error": 6.1815,
             "paper_target_kurtosis": 0.094
         },
         "table_4_clinical_validity": {

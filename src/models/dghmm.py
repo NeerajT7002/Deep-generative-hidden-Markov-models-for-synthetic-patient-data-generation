@@ -175,15 +175,11 @@ class DGHMM(nn.Module):
 
     def generate(self, num_samples: int, seq_len: int, device: str = 'cpu') -> tuple:
         """
-        Generates synthetic patient sequences using the pure DG-HMM generative process:
+        Generates synthetic patient sequences using the DG-HMM generative process:
         1. Sample initial state s_1 ~ pi
         2. Sample transitions s_t ~ A(s_{t-1}, :)
         3. Sample latent continuous state z_t ~ B_{s_t}
-        4. Decode observations ~x_t = g_psi(z_t, s_t)
-        
-        (Momenzadeh & Oshaghi 2026, Page 4-5: "Synthetic data generation process").
-        No empirical copula or quantile substitution shortcuts are used;
-        outputs are generated directly by the trained neural decoder network.
+        4. Decode observations x_t = g_psi(z_t, s_t)
         
         Args:
             num_samples (int): Number of patient sequences to generate
@@ -196,8 +192,8 @@ class DGHMM(nn.Module):
         """
         self.eval()
         with torch.no_grad():
-            pi = self.hmm.get_initial_distribution()  # (num_states,)
-            A = self.hmm.get_transition_matrix()      # (num_states, num_states)
+            pi = self.hmm.get_initial_distribution()
+            A = self.hmm.get_transition_matrix()
             
             # Step 1: Sample discrete HMM state sequences
             sampled_states = torch.zeros(num_samples, seq_len, dtype=torch.long, device=device)
@@ -205,7 +201,7 @@ class DGHMM(nn.Module):
             
             for t in range(1, seq_len):
                 prev_s = sampled_states[:, t - 1]
-                transition_probs = A[prev_s] # (num_samples, num_states)
+                transition_probs = A[prev_s]
                 sampled_states[:, t] = torch.multinomial(transition_probs, num_samples=1).squeeze(1)
                 
             # Step 2: Sample latent representations z_t ~ B_{s_t}
@@ -216,7 +212,7 @@ class DGHMM(nn.Module):
                     state = sampled_states[i, t].item()
                     z_curr = self._sample_latent(state, device=device)
                     
-                    # Temporal continuity within steady clinical states
+                    # Temporal persistence within steady clinical states
                     if t > 0 and state == sampled_states[i, t - 1].item():
                         rho = 0.85
                         z_sampled[i, t] = rho * z_sampled[i, t - 1] + float(np.sqrt(1.0 - rho**2)) * z_curr
@@ -228,45 +224,3 @@ class DGHMM(nn.Module):
             synthetic_x = self.decoder(z_sampled, state_onehot)
             
             return synthetic_x, sampled_states
-
-    def generate_counterfactual(self, target_states: torch.Tensor, device: str = 'cpu') -> torch.Tensor:
-        """
-        Generates synthetic patient vitals strictly conditioned on a specified 
-        clinical path (counterfactual / what-if trajectory).
-        
-        Args:
-            target_states (torch.Tensor): LongTensor of shape (num_samples, seq_len)
-            device (str): Execution device
-            
-        Returns:
-            synthetic_x (torch.Tensor): Counterfactual vitals trajectories (num_samples, seq_len, input_dim).
-        """
-        self.eval()
-        with torch.no_grad():
-            if not isinstance(target_states, torch.Tensor):
-                target_states = torch.tensor(target_states, dtype=torch.long, device=device)
-            else:
-                target_states = target_states.to(dtype=torch.long, device=device)
-                
-            if target_states.dim() == 1:
-                target_states = target_states.unsqueeze(0)
-                
-            num_samples, seq_len = target_states.shape
-            z_sampled = torch.zeros(num_samples, seq_len, self.latent_dim, device=device)
-            
-            for i in range(num_samples):
-                for t in range(seq_len):
-                    state = target_states[i, t].item()
-                    z_curr = self._sample_latent(state, device=device)
-                    
-                    if t > 0 and state == target_states[i, t - 1].item():
-                        rho = 0.85
-                        z_sampled[i, t] = rho * z_sampled[i, t - 1] + float(np.sqrt(1.0 - rho**2)) * z_curr
-                    elif t > 0:
-                        z_sampled[i, t] = 0.3 * z_sampled[i, t - 1] + 0.7 * z_curr
-                    else:
-                        z_sampled[i, t] = z_curr
-                        
-            state_onehot = F.one_hot(target_states, num_classes=self.num_states).float()
-            synthetic_x = self.decoder(z_sampled, state_onehot)
-            return synthetic_x

@@ -109,7 +109,7 @@
             <div class="kpi-card glass-panel glow-hover">
                 <div class="kpi-top">
                     <span class="kpi-code">TABLE 4 • VALIDITY</span>
-                    <span class="kpi-pill success">PERFECT</span>
+                    <span class="kpi-pill success">VALIDATED</span>
                 </div>
                 <div class="kpi-main">
                     <span class="kpi-big-num emerald-glow" id="metricRuleComp">100.0%</span>
@@ -121,31 +121,31 @@
             <div class="kpi-card glass-panel glow-hover">
                 <div class="kpi-top">
                     <span class="kpi-code">TABLE 4 • PHYSIOLOGY</span>
-                    <span class="kpi-pill success">PERFECT</span>
+                    <span class="kpi-pill success">VALIDATED</span>
                 </div>
                 <div class="kpi-main">
                     <span class="kpi-big-num emerald-glow" id="metricBoundsAdh">100.0%</span>
                 </div>
-                <div class="kpi-sub">Human Survival Bounds Adherence (Paper: 94.8%)</div>
+                <div class="kpi-sub">Physiological Bounds Adherence (Paper: 94.8%)</div>
                 <div class="kpi-bar-bg"><div class="kpi-bar-fill emerald" style="width: 100%;"></div></div>
             </div>
 
             <div class="kpi-card glass-panel glow-hover">
                 <div class="kpi-top">
-                    <span class="kpi-code">ORIGINAL INNOVATION</span>
-                    <span class="kpi-pill cyan">STATE OF THE ART</span>
+                    <span class="kpi-code">TABLE 2 • FIDELITY</span>
+                    <span class="kpi-pill cyan">EVALUATED</span>
                 </div>
                 <div class="kpi-main">
-                    <span class="kpi-big-num cyan-glow" id="metricTstrAuroc">0.6429</span>
+                    <span class="kpi-big-num cyan-glow" id="metricCorr">0.5691</span>
                 </div>
-                <div class="kpi-sub">94.74% Diagnostic Utility of Real Model (TRTR: 0.6786)</div>
-                <div class="kpi-bar-bg"><div class="kpi-bar-fill cyan" style="width: 94.7%;"></div></div>
+                <div class="kpi-sub">Correlation Preservation (Paper: 0.942)</div>
+                <div class="kpi-bar-bg"><div class="kpi-bar-fill cyan" style="width: 60%;"></div></div>
             </div>
 
             <div class="kpi-card glass-panel glow-hover">
                 <div class="kpi-top">
                     <span class="kpi-code">TABLE 3 • TEMPORAL</span>
-                    <span class="kpi-pill purple">SUPERIOR</span>
+                    <span class="kpi-pill purple">EVALUATED</span>
                 </div>
                 <div class="kpi-main">
                     <span class="kpi-big-num purple-glow" id="metricDtw">0.3335</span>
@@ -160,10 +160,6 @@
             <button class="nav-tab-item active" data-tab="generatorTab">
                 <span class="tab-icon">⚡</span>
                 <span class="tab-text">Synthetic Patient Telemetry</span>
-            </button>
-            <button class="nav-tab-item" data-tab="counterfactualTab">
-                <span class="tab-icon">🎯</span>
-                <span class="tab-text">"What-If" Counterfactual Steering</span>
             </button>
             <button class="nav-tab-item" data-tab="manifoldTab">
                 <span class="tab-icon">🔮</span>
@@ -285,78 +281,7 @@
             </div>
         </section>
 
-        <!-- TAB 2: "What-If" Counterfactual Steering -->
-        <section class="tab-pane" id="counterfactualTab">
-            <div class="glass-panel cf-full-studio">
-                <div class="cf-studio-top">
-                    <div>
-                        <h2 class="vis-title">Interactive "What-If" Counterfactual Steering Studio</h2>
-                        <p class="vis-sub">Click individual hours or drag across the timeline to steer the discrete Markov health states.</p>
-                    </div>
-                    <div class="cf-presets-box">
-                        <span class="preset-label">CLINICAL PRESETS:</span>
-                        <button class="preset-pill active" data-preset="septic">🚨 Acute Septic Shock</button>
-                        <button class="preset-pill" data-preset="trauma">🩺 Trauma Recovery</button>
-                        <button class="preset-pill" data-preset="unstable">⚡ Chronic Instability</button>
-                    </div>
-                </div>
-
-                <!-- 24-Hour Paintable Interactive Timeline -->
-                <div class="interactive-timeline-module">
-                    <div class="timeline-meta-bar">
-                        <span>HOUR 01 (ADMISSION)</span>
-                        <span>HOUR 06</span>
-                        <span>HOUR 12 (MID-STAY)</span>
-                        <span>HOUR 18</span>
-                        <span>HOUR 24 (DISCHARGE)</span>
-                    </div>
-
-                    <div class="timeline-track-grid" id="timelineTrackGrid">
-                        <!-- 24 Paintable Hour Slots Generated via JS -->
-                    </div>
-
-                    <div class="timeline-legend-row">
-                        <div class="legend-badge-item s0">
-                            <span class="leg-dot s0"></span>
-                            <span>State 0: Stable</span>
-                        </div>
-                        <div class="legend-badge-item s1">
-                            <span class="leg-dot s1"></span>
-                            <span>State 1: Moderate</span>
-                        </div>
-                        <div class="legend-badge-item s2">
-                            <span class="leg-dot s2"></span>
-                            <span>State 2: Guarded</span>
-                        </div>
-                        <div class="legend-badge-item s3">
-                            <span class="leg-dot s3"></span>
-                            <span>State 3: Critical Decompensation</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="cf-controls-bar">
-                    <button class="cyber-btn cyber-btn-primary glow-active" id="btnRunCounterfactual">
-                        <span class="btn-play">▶</span>
-                        <span>SYNTHESIZE STEERED CLINICAL PATHWAY</span>
-                    </button>
-                    <span class="cf-status-label" id="cfStatusLabel">Ready to steer patient manifold</span>
-                </div>
-
-                <!-- Counterfactual Multi-Line Chart -->
-                <div class="chart-display-container" style="height: 380px;">
-                    <div class="chart-tag-bar">
-                        <span class="tag-title">STEERED PHYSIOLOGICAL MANIFOLD RESPONSE</span>
-                        <span class="tag-live">NEURAL GENERATION</span>
-                    </div>
-                    <div class="chart-canvas-wrap" style="height: 320px;">
-                        <canvas id="chartCounterfactual"></canvas>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- TAB 3: Latent Topology & Markov Transitions -->
+        <!-- TAB 2: Latent Topology & Markov Transitions -->
         <section class="tab-pane" id="manifoldTab">
             <!-- 3-Step DG-HMM Architectural Explainer Banner -->
             <div class="architecture-explainer-banner">
@@ -590,8 +515,8 @@
                 </div>
 
                 <div class="callout-box" style="margin-top: 18px;">
-                    <strong>Academic Defense Note:</strong>
-                    The published paper was evaluated on 15,728 patients on an NVIDIA RTX 4060 GPU for 12 hours. Our academic demonstration reproduces the entire mathematical framework on the 75-patient MIMIC-III demo cohort, achieving 100% clinical rule compliance, 0.33 DTW temporal distance, and 94.7% downstream clinical decision utility.
+                    <strong>Evaluation Note:</strong>
+                    The reference paper was evaluated on 15,728 patients with multi-modal inputs. Our implementation evaluates the DG-HMM architecture on the public MIMIC-III demo cohort (75 stays, 6 continuous vitals over 24 hours), reporting empirical metrics across all four paper dimensions (Tables 2–5).
                 </div>
             </div>
         </section>

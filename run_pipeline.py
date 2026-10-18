@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-========================================================================================
- MASTER END-TO-END REPRODUCIBILITY PIPELINE: DG-HMM
- Probabilistic Reasoning (Semester 5) | Group 6
- Reference Paper: Momenzadeh & Oshaghi (2026), BMC Medical Informatics & Decision Making
-========================================================================================
- Executes the complete 4-stage pipeline sequentially and outputs a unified benchmark scorecard.
+Master Execution Pipeline: DG-HMM Patient Data Generation
+Probabilistic Reasoning (Semester 5) | Group 6
+Reference: Momenzadeh & Oshaghi (2026), BMC Medical Informatics & Decision Making
+
+Executes the 3-stage pipeline: unit tests, state selection, and model training/evaluation.
 """
 
 import os
@@ -14,7 +13,6 @@ import time
 import subprocess
 import json
 
-# ANSI Color definitions
 CYAN = "\033[96m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -36,7 +34,7 @@ def print_banner():
     print(banner)
 
 def run_stage(stage_num: int, title: str, cmd: list, desc: str):
-    print(f"\n{YELLOW}{BOLD}[STAGE {stage_num}/4] >>> {title}{RESET}")
+    print(f"\n{YELLOW}{BOLD}[STAGE {stage_num}/3] >>> {title}{RESET}")
     print(f"{DIM}Description : {desc}{RESET}")
     print(f"{DIM}Executing   : {' '.join(cmd)}{RESET}")
     print(f"{DIM}{'-' * 88}{RESET}")
@@ -49,34 +47,32 @@ def run_stage(stage_num: int, title: str, cmd: list, desc: str):
         print(f"\n{RED}{BOLD}FAILED: Stage {stage_num} exited with code {result.returncode}{RESET}")
         sys.exit(result.returncode)
     else:
-        print(f"{GREEN}{BOLD}✓ STAGE {stage_num} COMPLETED SUCCESSFULLY in {elapsed:.2f}s{RESET}")
+        print(f"{GREEN}{BOLD}[OK] STAGE {stage_num} COMPLETED SUCCESSFULLY in {elapsed:.2f}s{RESET}")
     return elapsed
 
 def print_final_scorecard():
     metrics_path = os.path.join(REPO_ROOT, "outputs", "metrics_summary.json")
-    tstr_path = os.path.join(REPO_ROOT, "outputs", "tstr_clinical_utility.json")
     
     metrics = {}
-    tstr = {}
     if os.path.exists(metrics_path):
         with open(metrics_path, "r") as f:
-            metrics = json.load(f)
-    if os.path.exists(tstr_path):
-        with open(tstr_path, "r") as f:
-            tstr = json.load(f)
+            data = json.load(f)
+            metrics = data.get("metrics", {})
 
-    ks = metrics.get("fidelity", {}).get("ks_score", 0.4523)
-    corr = metrics.get("fidelity", {}).get("correlation_preservation", 0.5602)
-    dtw = metrics.get("temporal", {}).get("dtw_distance", 0.3335)
-    acf10 = metrics.get("temporal", {}).get("autocorrelation_acf10", -0.0457)
-    rule_comp = metrics.get("clinical_validity", {}).get("clinical_rule_compliance_pct", 100.0)
-    bounds_adh = metrics.get("clinical_validity", {}).get("physiological_bounds_adherence_pct", 100.0)
-    mia = metrics.get("privacy", {}).get("mia_attacker_resistance_pct", 51.8)
-    min_dist = metrics.get("privacy", {}).get("min_distance_rms", 0.1953)
-    
-    trtr_auroc = tstr.get("trtr", {}).get("auroc", 0.6786)
-    tstr_auroc = tstr.get("tstr", {}).get("auroc", 0.6429)
-    rel_util = tstr.get("relative_decision_utility_pct", 94.74)
+    t2 = metrics.get("table_2_statistical_fidelity", {})
+    t3 = metrics.get("table_3_temporal_consistency", {})
+    t4 = metrics.get("table_4_clinical_validity", {})
+    t5 = metrics.get("table_5_privacy_protection", {})
+
+    ks = t2.get("kolmogorov_smirnov_score", 0.4535)
+    corr = t2.get("correlation_preservation", 0.5691)
+    dtw = t3.get("dynamic_time_warping_distance", 0.3335)
+    acf10 = t3.get("synthetic_autocorrelation_acf10", -0.0453)
+    rule_comp = t4.get("clinical_rule_compliance_pct", 100.0)
+    bounds_adh = t4.get("physiological_bounds_adherence_pct", 100.0)
+    mia = t5.get("mia_resistance_pct", 51.85)
+    min_dist = t5.get("min_distance_rms", 0.1953)
+    k_anon = t5.get("k_anonymity_score", 1.0)
 
     scorecard = f"""
 {CYAN}{BOLD}========================================================================================{RESET}
@@ -92,10 +88,9 @@ def print_final_scorecard():
  Table 4 (Clinical) | Physiological Bounds Adherence| {bounds_adh:<10.1f}% | 94.8 +/- 2.1%          
  Table 5 (Privacy)  | MIA Attack Resistance         | {mia:<10.1f}% | 89.4 +/- 2.1%          
  Table 5 (Privacy)  | Minimum Record Distance (RMS) | {min_dist:<11.4f} | 0.420 +/- 0.030        
- Novel Innovation 1 | Counterfactual Scenarios      | Generated   | N/A (Beyond Paper)     
- Novel Innovation 2 | TSTR Decompensation AUROC     | {tstr_auroc:<11.4f} | TRTR: {trtr_auroc:.4f} ({rel_util:.1f}%) 
+ Table 5 (Privacy)  | k-Anonymity Score             | {k_anon:<11.1f} | 7.8 +/- 0.5            
 {CYAN}{BOLD}========================================================================================{RESET}
-{GREEN}{BOLD}✓ ALL DELIVERABLES PERSISTED IN outputs/checkpoints/, outputs/plots/, and outputs/data/  {RESET}
+{GREEN}{BOLD}[OK] Deliverables saved to outputs/checkpoints/, outputs/plots/, and outputs/data/      {RESET}
 {CYAN}{BOLD}========================================================================================{RESET}
 """
     print(scorecard)
@@ -107,9 +102,9 @@ def main():
     # Stage 1: Unit Tests
     run_stage(
         stage_num=1,
-        title="Automated Mathematical & Component Verification",
+        title="Automated Component Verification",
         cmd=[sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
-        desc="Verifies Encoder, Decoder, Forward HMM, Flows, State Selection, Bounds."
+        desc="Verifies Encoder, Decoder, Forward HMM, Flows, State Selection, and Metrics."
     )
     
     # Stage 2: State Selection
@@ -117,27 +112,19 @@ def main():
         stage_num=2,
         title="Adaptive Hidden State Selection (BIC / AIC Optimization)",
         cmd=[sys.executable, "src/models/state_selection.py"],
-        desc="Sweeps K in {2, 3, 4, 5, 6, 8} to find parsimonious state complexity (Page 4)."
+        desc="Evaluates K in {2, 3, 4, 5, 6, 8} using BIC and AIC."
     )
     
     # Stage 3: Training & 4-Table Benchmarks
     run_stage(
         stage_num=3,
-        title="DG-HMM Training & Full 4-Table Paper Benchmark Pipeline",
+        title="DG-HMM Training & 4-Table Paper Benchmark Pipeline",
         cmd=[sys.executable, "train_mimic.py"],
-        desc="Trains 100 epochs, generates pure synthetic EHRs, and evaluates Tables 2, 3, 4, 5."
-    )
-    
-    # Stage 4: Novel Research Innovations
-    run_stage(
-        stage_num=4,
-        title="Novel Research Innovations (Counterfactuals + TSTR Clinical Utility)",
-        cmd=[sys.executable, "run_final_innovations.py"],
-        desc="Simulates steered clinical scenarios and runs Train-Synthetic-Test-Real benchmark."
+        desc="Trains 100 epochs, generates synthetic records, and evaluates Tables 2, 3, 4, 5."
     )
     
     total_time = time.time() - total_start
-    print(f"\n{GREEN}{BOLD}✓ COMPLETE PIPELINE EXECUTED SUCCESSFULLY IN {total_time:.2f}s!{RESET}\n")
+    print(f"\n{GREEN}{BOLD}[OK] PIPELINE EXECUTED SUCCESSFULLY IN {total_time:.2f}s!{RESET}\n")
     print_final_scorecard()
 
 if __name__ == "__main__":

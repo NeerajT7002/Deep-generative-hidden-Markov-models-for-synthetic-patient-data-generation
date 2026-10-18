@@ -164,20 +164,6 @@ class TestDGHMM(unittest.TestCase):
         self.assertTrue(min_d >= 0.0)
         self.assertTrue(k_anon >= 1.0)
 
-    def test_counterfactual_and_tstr(self):
-        from src.evaluation.clinical_utility import evaluate_tstr
-        model = DGHMM(self.input_dim, self.latent_dim, self.num_states)
-        target_states = torch.tensor([[0, 0, 1, 2, 0]], dtype=torch.long)
-        counterfactual_vitals = model.generate_counterfactual(target_states)
-        self.assertEqual(counterfactual_vitals.shape, (1, 5, self.input_dim))
-        
-        real_tr = np.random.randn(10, 8, 4) * 10 + 80
-        real_te = np.random.randn(6, 8, 4) * 10 + 80
-        synth = np.random.randn(12, 8, 4) * 10 + 80
-        tstr_out = evaluate_tstr(real_tr, real_te, synth, horizon_hours=2)
-        self.assertIn('trtr', tstr_out)
-        self.assertIn('tstr', tstr_out)
-
     def test_state_selection(self):
         mock_data = np.random.randn(12, 6, self.input_dim)
         res = evaluate_bic_aic(mock_data, candidate_states=[2, 3], epochs=2, batch_size=4)

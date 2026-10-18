@@ -230,38 +230,23 @@ We utilized the \textbf{PhysioNet MIMIC-III (Medical Information Mart for Intens
 \end{itemize}
 
 % =========================================================================
-\section{Novel Research Contributions (Beyond the Paper)}
+\section{Generative Sampling \& Synthetic Patient Cohort Synthesis}
 % =========================================================================
 
-The published reference paper (Momenzadeh \& Oshaghi 2026) stops at passive, random patient synthesis. Our team implemented two original extensions that provide active clinical utility.
-
-\subsection{Innovation 1: Controllable ``What-If'' Counterfactual Simulation}
-Clinicians require the ability to simulate specific patient degradation scenarios on-demand. We engineered \texttt{model.generate\_counterfactual()}:
-\begin{itemize}
-    \item \textbf{Mechanism}: Clinicians provide an explicit target sequence of Markov states $S_{\text{target}} \in \{0, 1, 2, 3\}^{24}$. The model samples latent vectors $z_t \sim B_{s_t}(z)$ with an autoregressive temporal momentum process:
+Once trained, the DG-HMM generates synthetic patient trajectories through the forward probabilistic generative process:
+\begin{enumerate}
+    \item \textbf{Initial Health State}: Sample initial state $s_1 \sim \text{Categorical}(\pi)$.
+    \item \textbf{Markov State Transitions}: For hour $t = 2, \dots, T$, sample $s_t \sim \text{Categorical}(A(s_{t-1}, :))$.
+    \item \textbf{Continuous Latent Sampling}: Sample continuous latent vector $z_t \sim \mathcal{N}(\mu_{s_t}, \Sigma_{s_t})$ with autoregressive temporal persistence:
     \begin{equation}
         z_t = \rho \cdot z_{t-1} + \sqrt{1 - \rho^2} \cdot \zeta_t, \quad \rho = 0.85
     \end{equation}
-    The decoder synthesizes smooth continuous vitals that follow the clinician's exact condition scenario.
-    \item \textbf{Clinical Scenarios Implemented}:
-    \begin{enumerate}
-        \item \textit{Acute Septic Shock}: 8h Stable $\to$ 8h Critical (acute hypotension $SBP < 85$, tachycardia $HR > 120$) $\to$ 8h Guarded (vasopressor stabilization).
-        \item \textit{Post-Surgical Recovery}: Arrives Critical from surgery $\to$ stabilizes to Guarded $\to$ recovers to Stable discharge readiness.
-        \item \textit{Chronic Hemodynamic Instability}: Persistent oscillation between Moderate and Guarded states.
-    \end{enumerate}
-\end{itemize}
-
-\subsection{Innovation 2: Downstream Clinical Decision Utility (TSTR Benchmark)}
-To prove that our synthetic cohort is not merely visually convincing but \textbf{clinically functional}, we established a formal \textbf{Train-on-Synthetic, Test-on-Real (TSTR)} benchmark:
-\begin{itemize}
-    \item \textbf{Clinical Task}: Forecasting 24-hour acute hemodynamic decompensation / shock using the first 18 hours of patient vitals to predict collapse in hours 19--24.
-    \item \textbf{Experimental Comparison}:
-    \begin{itemize}
-        \item \textbf{TRTR (Train Real, Test Real)}: Baseline model trained on real MIMIC-III patients, tested on 20\% unseen real ICU patients $\to$ \textbf{AUROC 0.6786}.
-        \item \textbf{TSTR (Train Synthetic, Test Real)}: Model trained \textbf{exclusively on our DG-HMM synthetic cohort}, tested on the \textbf{same unseen real ICU patients} $\to$ \textbf{AUROC 0.6429--0.6964}.
-    \end{itemize}
-    \item \textbf{Significance}: Models trained on our synthetic cohort achieve \textbf{94.7\% to 102.6\% of the prognostic decision utility} of models trained on real confidential patient records.
-\end{itemize}
+    \item \textbf{Neural Decoding}: The deep decoder maps the combined representation to continuous physiological observations:
+    \begin{equation}
+        \tilde{x}_t = g_\psi(z_t, \text{OneHot}(s_t))
+    \end{equation}
+\end{enumerate}
+This process synthesizes longitudinal patient vitals without duplicating real patient records.
 
 % =========================================================================
 \section{Quantitative Results Across All 4 Paper Tables}
@@ -301,15 +286,15 @@ All metrics are computed using unclipped mathematical definitions against the pu
 
 To bridge deep learning research with end-user clinical practice, we implemented a complete full-stack web application:
 \begin{enumerate}
-    \item \textbf{Backend (\texttt{app.py})}: A lightweight Flask REST server exposing endpoints for on-demand inference (\texttt{/api/generate\_patient}), counterfactual generation (\texttt{/api/counterfactual}), real-patient overlays (\texttt{/api/real\_sample}), and dataset streaming (\texttt{/api/cohort\_dataset}).
+    \item \textbf{Backend (\texttt{app.py})}: A lightweight Flask REST server exposing endpoints for on-demand inference (\texttt{/api/generate\_patient}), real-patient overlays (\texttt{/api/real\_sample}), benchmark metrics (\texttt{/api/metrics}), and dataset streaming (\texttt{/api/cohort\_dataset}).
     \item \textbf{ICU Command Center (\texttt{index.html})}:
     \begin{itemize}
-        \item Styled as a dark-mode ICU bedside telemetry monitor with Glassmorphism aesthetics.
+        \item Styled as an ICU bedside telemetry monitor with Glassmorphism aesthetics.
         \item \textbf{Real-Time CRT ECG Lead II Animation}: An HTML5 canvas rendering a dynamic 60Hz cardiac rhythm sweep.
         \item \textbf{Interactive Trajectory Charting}: Chart.js rendering 24-hour trajectories across 6 vital signs with standard deviation confidence envelopes.
-        \item \textbf{Counterfactual Steerer}: Clinicians can select custom disease pathways and observe the generated vital curves live.
+        \item \textbf{Latent Manifold & Markov Transitions}: Interactive 2D coordinate space and transition probability matrix inspector.
     \end{itemize}
-    \item \textbf{Standalone Cohort Dataset Window (\texttt{dataset.html})}: A searchable, filterable data portal displaying all 1,200+ generated hourly patient records with direct CSV export.
+    \item \textbf{Standalone Cohort Dataset Window (\texttt{dataset.html})}: A searchable, filterable data portal displaying all generated hourly patient records with direct CSV export.
 \end{enumerate}
 
 % =========================================================================
@@ -333,10 +318,12 @@ Third, a Deep Decoder concatenates the latent vector with the discrete state one
 ``We trained on the PhysioNet MIMIC-III Clinical Database Demo, extracting 75 patient stays over 24 hours. To decide the number of states, we ran an automated BIC and AIC sweep across candidate states; $K = 4$ emerged as mathematically optimal, corresponding to Stable, Moderate, Guarded, and Critical Shock.''
 \end{tcolorbox}
 
-\begin{tcolorbox}[title=\textbf{Step 4: Our Novel Contributions Beyond the Paper}]
-``The published paper stops at passive data generation. We developed two novel research contributions:
-1. \textbf{Controllable Counterfactual Simulation}: Clinicians can steer the hidden Markov chain to generate targeted scenarios, such as Septic Shock decompensation or Post-Op recovery.
-2. \textbf{TSTR Clinical Decision Utility Benchmark}: We proved that predictive models trained purely on our synthetic cohort achieve 95\% to 102\% of the diagnostic decision utility of models trained on real patient data when evaluated on unseen real ICU patients.''
+\begin{tcolorbox}[title=\textbf{Step 4: Comprehensive 4-Dimension Evaluation}]
+``We evaluated our trained model strictly across the four evaluation dimensions in Tables 2, 3, 4, and 5 of the paper:
+1. \textbf{Fidelity (Table 2)}: Evaluated Kolmogorov-Smirnov score (0.4535) and Pearson correlation preservation (0.5691).
+2. \textbf{Temporal Dynamics (Table 3)}: Measured dynamic time warping (0.3335) and autocorrelation.
+3. \textbf{Clinical Validity (Table 4)}: Verified 100\% compliance with medical consistency rules ($SBP > DBP + 10$, $SpO_2 \le 100\%$, Shock Index).
+4. \textbf{Privacy (Table 5)}: Evaluated Membership Inference Attack (MIA) resistance (51.85\%) and non-zero minimum RMS record distance (0.1953), demonstrating that the model learns the physiological manifold rather than memorizing individual training patients.''
 \end{tcolorbox}
 
 \begin{tcolorbox}[title=\textbf{Step 5: The Interactive Web Dashboard}]

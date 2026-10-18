@@ -5,8 +5,6 @@
 // ========================================================================================
 
 let currentSyntheticData = null;
-let currentStates = [0,0,0,0, 0,0,0,0, 3,3,3,3, 3,3,3,3, 2,2,2,2, 2,2,2,2]; // Default Septic Shock
-let isDraggingTimeline = false;
 let audioEnabled = false;
 let audioCtx = null;
 
@@ -14,7 +12,6 @@ let audioCtx = null;
 let chartHemodynamics = null;
 let chartMetabolic = null;
 let chartRadar = null;
-let chartCounterfactual = null;
 
 const STATE_NAMES = ['Stable', 'Moderate', 'Guarded', 'Critical'];
 const STATE_COLORS = ['#059669', '#0284c7', '#d97706', '#dc2626'];
@@ -26,7 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initCharts();
     initRadarChart();
-    initTimelineSlots();
     initManifoldTopology();
     loadBenchmarkMetrics();
     initInlineDatasetViewer();
@@ -40,10 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnOverlayReal').addEventListener('click', () => {
         playBeep(660, 'sine', 0.06);
         overlayRealPatient();
-    });
-    document.getElementById('btnRunCounterfactual').addEventListener('click', () => {
-        playBeep(520, 'triangle', 0.12);
-        runCounterfactualSimulation();
     });
     document.getElementById('btnDownloadCSV').addEventListener('click', downloadPatientCSV);
     const btnReplay = document.getElementById('btnReplayPath');
@@ -256,10 +248,6 @@ function initTabs() {
             const pane = document.getElementById(target);
             if (pane) pane.classList.add('active');
 
-            if (target === 'counterfactualTab' && !chartCounterfactual) {
-                initCounterfactualChart();
-                runCounterfactualSimulation();
-            }
             if (target === 'manifoldTab') {
                 setTimeout(() => {
                     renderManifoldTrajectory(currentSyntheticData ? currentSyntheticData.records : null);
@@ -349,36 +337,6 @@ function initRadarChart() {
                 }
             },
             plugins: { legend: { display: false } }
-        }
-    });
-}
-
-function initCounterfactualChart() {
-    const hours = Array.from({ length: 24 }, (_, i) => `H${i + 1}`);
-    const ctx = document.getElementById('chartCounterfactual').getContext('2d');
-    chartCounterfactual = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: hours,
-            datasets: [
-                { label: 'Steered Heart Rate', borderColor: '#00f2fe', backgroundColor: 'transparent', borderWidth: 2.6, tension: 0.3, data: [] },
-                { label: 'Steered Systolic BP', borderColor: '#a855f7', backgroundColor: 'transparent', borderWidth: 2.6, tension: 0.3, data: [] },
-                { label: 'Steered Diastolic BP', borderColor: '#f43f5e', backgroundColor: 'transparent', borderWidth: 2.0, borderDash: [4, 4], tension: 0.3, data: [] },
-                { label: 'Steered SpO2 (%)', borderColor: '#00e676', backgroundColor: 'transparent', borderWidth: 2.2, tension: 0.3, data: [] }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                legend: { labels: { color: '#94a3b8', font: { family: 'Outfit', size: 12 } } },
-                tooltip: { backgroundColor: 'rgba(6, 9, 16, 0.95)', titleColor: '#00f2fe', bodyFont: { family: 'JetBrains Mono' } }
-            },
-            scales: {
-                x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#64748b', font: { family: 'JetBrains Mono' } } },
-                y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#64748b', font: { family: 'JetBrains Mono' } } }
-            }
         }
     });
 }
@@ -488,94 +446,6 @@ async function overlayRealPatient() {
     }
 }
 
-// =========================================================================
-// 7. DRAG-AND-PAINT COUNTERFACTUAL TIMELINE
-// =========================================================================
-function initTimelineSlots() {
-    const grid = document.getElementById('timelineTrackGrid');
-    if (!grid) return;
-    grid.innerHTML = '';
-
-    for (let h = 0; h < 24; h++) {
-        const cell = document.createElement('div');
-        cell.className = `hour-cell cell-s${currentStates[h]}`;
-        cell.innerText = h + 1;
-        cell.dataset.hour = h;
-
-        cell.addEventListener('mousedown', () => {
-            isDraggingTimeline = true;
-            toggleState(h, cell);
-        });
-
-        cell.addEventListener('mouseenter', () => {
-            if (isDraggingTimeline) {
-                toggleState(h, cell);
-            }
-        });
-
-        grid.appendChild(cell);
-    }
-
-    window.addEventListener('mouseup', () => {
-        isDraggingTimeline = false;
-    });
-}
-
-function toggleState(h, cell) {
-    currentStates[h] = (currentStates[h] + 1) % 4;
-    cell.className = `hour-cell cell-s${currentStates[h]}`;
-    playBeep(400 + currentStates[h] * 120, 'triangle', 0.03);
-    document.getElementById('cfStatusLabel').innerText = `Hour ${h + 1} set to ${STATE_NAMES[currentStates[h]]}`;
-}
-
-function updateTimelineCells() {
-    const cells = document.querySelectorAll('.hour-cell');
-    cells.forEach((cell, h) => {
-        cell.className = `hour-cell cell-s${currentStates[h]}`;
-    });
-}
-
-function applyPreset(preset) {
-    if (preset === 'septic') {
-        currentStates = [0,0,0,0, 0,0,0,0, 3,3,3,3, 3,3,3,3, 2,2,2,2, 2,2,2,2];
-    } else if (preset === 'trauma') {
-        currentStates = [3,3,3,3, 3,3,3,3, 2,2,2,2, 1,1,1,1, 0,0,0,0, 0,0,0,0];
-    } else if (preset === 'unstable') {
-        currentStates = [1,2,1,2, 1,2,1,2, 2,3,2,3, 2,1,2,1, 1,2,1,2, 2,3,2,1];
-    }
-    updateTimelineCells();
-    runCounterfactualSimulation();
-}
-
-async function runCounterfactualSimulation() {
-    const btn = document.getElementById('btnRunCounterfactual');
-    btn.disabled = true;
-    btn.innerHTML = 'Neural Steering in Progress...';
-
-    try {
-        const res = await fetch('/api/counterfactual', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ states: currentStates })
-        });
-        const data = await res.json();
-
-        if (!chartCounterfactual) initCounterfactualChart();
-
-        chartCounterfactual.data.datasets[0].data = data.records.map(r => r['Heart Rate']);
-        chartCounterfactual.data.datasets[1].data = data.records.map(r => r['Systolic BP']);
-        chartCounterfactual.data.datasets[2].data = data.records.map(r => r['Diastolic BP']);
-        chartCounterfactual.data.datasets[3].data = data.records.map(r => r['SpO2']);
-        chartCounterfactual.update();
-
-        document.getElementById('cfStatusLabel').innerText = `Simulated 24-hr clinical trajectory successfully.`;
-    } catch (err) {
-        console.error(err);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<span class="btn-play">▶</span> <span>SYNTHESIZE STEERED CLINICAL PATHWAY</span>';
-    }
-}
 
 // =========================================================================
 // 8. 2D CONTINUOUS LATENT MANIFOLD & MARKOV TOPOLOGY
@@ -1016,19 +886,18 @@ async function loadBenchmarkMetrics() {
 
         document.getElementById('metricRuleComp').innerText = `${data.rule_compliance.ours.toFixed(1)}%`;
         document.getElementById('metricBoundsAdh').innerText = `${data.bounds_adherence.ours.toFixed(1)}%`;
-        document.getElementById('metricTstrAuroc').innerText = `${data.tstr_auroc.toFixed(4)}`;
+        document.getElementById('metricCorr').innerText = `${data.correlation.ours.toFixed(4)}`;
         document.getElementById('metricDtw').innerText = `${data.dtw.ours.toFixed(4)}`;
 
         const tbody = document.getElementById('benchmarkTableBody');
         const rows = [
             { dim: 'Statistical Fidelity', metric: 'Kolmogorov-Smirnov (KS)', ours: data.ks_score.ours.toFixed(4), paper: data.ks_score.paper, note: 'Captures marginal distributions across 6 vitals' },
-            { dim: 'Statistical Fidelity', metric: 'Correlation Preservation', ours: data.correlation.ours.toFixed(4), paper: data.correlation.paper, note: 'Pure neural decoding without copula cheating' },
-            { dim: 'Temporal Dynamics', metric: 'DTW Alignment Distance', ours: data.dtw.ours.toFixed(4), paper: data.dtw.paper, note: 'Superior sequence matching (Lower is better)' },
-            { dim: 'Clinical Validity', metric: 'Clinical Rule Compliance', ours: `${data.rule_compliance.ours.toFixed(1)}%`, paper: data.rule_compliance.paper, note: '100% SBP > DBP + 10 mmHg & shock limits' },
-            { dim: 'Clinical Validity', metric: 'Physiological Bounds Adherence', ours: `${data.bounds_adherence.ours.toFixed(1)}%`, paper: data.bounds_adherence.paper, note: '100% human survival range adherence' },
+            { dim: 'Statistical Fidelity', metric: 'Correlation Preservation', ours: data.correlation.ours.toFixed(4), paper: data.correlation.paper, note: 'Evaluated directly from neural decoder' },
+            { dim: 'Temporal Dynamics', metric: 'DTW Alignment Distance', ours: data.dtw.ours.toFixed(4), paper: data.dtw.paper, note: 'Sequence alignment distance (lower is closer)' },
+            { dim: 'Clinical Validity', metric: 'Clinical Rule Compliance', ours: `${data.rule_compliance.ours.toFixed(1)}%`, paper: data.rule_compliance.paper, note: 'SBP > DBP + 10 mmHg & shock index limits' },
+            { dim: 'Clinical Validity', metric: 'Physiological Bounds Adherence', ours: `${data.bounds_adherence.ours.toFixed(1)}%`, paper: data.bounds_adherence.paper, note: 'Human physiological reference range compliance' },
             { dim: 'Privacy Protection', metric: 'MIA Attack Resistance', ours: `${data.mia_resistance.ours.toFixed(1)}%`, paper: data.mia_resistance.paper, note: 'Empirical membership inference resistance' },
-            { dim: 'Privacy Protection', metric: 'Minimum Record Distance (RMS)', ours: data.min_distance.ours.toFixed(4), paper: data.min_distance.paper, note: 'Proves zero patient memorization' },
-            { dim: 'Novel Extension', metric: 'TSTR Downstream Decision AUROC', ours: `${data.tstr_auroc.toFixed(4)}`, paper: `TRTR: ${data.trtr_auroc.toFixed(4)}`, note: `Retains ${data.relative_utility.toFixed(1)}% diagnostic decision utility` }
+            { dim: 'Privacy Protection', metric: 'Minimum Record Distance (RMS)', ours: data.min_distance.ours.toFixed(4), paper: data.min_distance.paper, note: 'Indicates synthetic records do not duplicate training samples' }
         ];
 
         tbody.innerHTML = rows.map(r => `
