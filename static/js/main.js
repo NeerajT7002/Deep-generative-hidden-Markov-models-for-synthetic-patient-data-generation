@@ -884,10 +884,14 @@ async function loadBenchmarkMetrics() {
         const res = await fetch('/api/metrics');
         const data = await res.json();
 
-        document.getElementById('metricRuleComp').innerText = `${data.rule_compliance.ours.toFixed(1)}%`;
-        document.getElementById('metricBoundsAdh').innerText = `${data.bounds_adherence.ours.toFixed(1)}%`;
-        document.getElementById('metricCorr').innerText = `${data.correlation.ours.toFixed(4)}`;
-        document.getElementById('metricDtw').innerText = `${data.dtw.ours.toFixed(4)}`;
+        const elRule = document.getElementById('metricRuleComp');
+        if (elRule) elRule.innerText = `${data.rule_compliance.ours.toFixed(1)}%`;
+        const elBounds = document.getElementById('metricBoundsAdh');
+        if (elBounds) elBounds.innerText = `${data.bounds_adherence.ours.toFixed(1)}%`;
+        const elCorr = document.getElementById('metricCorr');
+        if (elCorr) elCorr.innerText = `${data.correlation.ours.toFixed(4)}`;
+        const elDtw = document.getElementById('metricDtw');
+        if (elDtw) elDtw.innerText = `${data.dtw.ours.toFixed(4)}`;
 
         const tbody = document.getElementById('benchmarkTableBody');
         const rows = [
